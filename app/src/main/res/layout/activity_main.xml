@@ -10,6 +10,13 @@
     tools:deviceIds="tv"
     tools:ignore="MergeRootFrame" >
 
+    <ImageView
+        android:id="@+id/imageView"
+        android:layout_width="70dp"
+        android:layout_height="70dp"
+        android:src="@drawable/default_watch"
+        android:visibility="gone" />
+
     <LinearLayout
         android:id="@+id/sudMenuLarge"
         android:layout_width="wrap_content"
@@ -80,7 +87,7 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:layout_weight="1"
-            android:background="#3E3E3E"
+            android:background="#FFFFFF"
             android:gravity="center"
             android:text="5"
             android:textColor="#000000"
@@ -263,13 +270,6 @@
             android:textSize="24sp" />
     </LinearLayout>
 
-    <ImageView
-        android:id="@+id/imageView"
-        android:layout_width="50dp"
-        android:layout_height="50dp"
-        android:src="@drawable/default_watch"
-        android:visibility="gone" />
-
     <LinearLayout
         android:id="@+id/gratitude"
         android:layout_width="wrap_content"
@@ -386,6 +386,66 @@
             android:textColor="#000000"
             android:textSize="24sp"
             android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/min"
+            android:layout_width="110dp"
+            android:layout_height="70dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/textView13"
+                android:layout_width="match_parent"
+                android:layout_height="35dp"
+                android:background="#FFFFFF"
+                android:text="min время"
+                android:textColor="#000000"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/backMIN"
+                android:layout_width="match_parent"
+                android:layout_height="33dp"
+                android:layout_marginTop="2dp"
+                android:background="#FFFFFF"
+                android:gravity="center"
+                android:text="5"
+                android:textColor="#000000"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/max"
+            android:layout_width="110dp"
+            android:layout_height="70dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/textView15"
+                android:layout_width="match_parent"
+                android:layout_height="35dp"
+                android:background="#FFFFFF"
+                android:text="max время"
+                android:textColor="#000000"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/backMAX"
+                android:layout_width="match_parent"
+                android:layout_height="33dp"
+                android:layout_marginTop="2dp"
+                android:background="#FFFFFF"
+                android:gravity="center"
+                android:text="12"
+                android:textColor="#000000"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
 
     <TextView
@@ -398,4 +458,14 @@
         android:layout_marginEnd="20dp"
         android:text="настройка цвета фона"
         android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/loading"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:gravity="center"
+        android:text="ЗАГРУЗКА"
+        android:textColor="#FFFFFF"
+        android:textSize="34sp" />
 </RelativeLayout>

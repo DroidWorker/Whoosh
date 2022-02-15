@@ -20,13 +20,9 @@ import kotlinx.coroutines.*
 import java.util.*
 import kotlin.math.cos
 import kotlin.math.sin
-import android.content.Intent
-import android.util.Log
+import android.view.WindowManager
+import android.view.animation.LinearInterpolator
 
-
-/**
- * Loads [MainFragment].
- */
 class MainActivity : FragmentActivity() {
     val colors : List<Int> = listOf(Color.rgb(229,28,35),
         Color.rgb(233,30,99),
@@ -50,6 +46,15 @@ class MainActivity : FragmentActivity() {
         Color.rgb(255,255,255),
         Color.rgb(0,0,0)
     )
+
+    var attendToNegativeID = 0
+    var blinkID = 0
+    var doDeepInspirationID = 0
+    var setPointNegativeID = 0
+    var setResourcePointID = 0
+    var sudID = 0
+    var wooshID = 0
+
     var currentColorID = 20
     var prevColorID = 20
     var colorSettingActive : Boolean = false
@@ -85,10 +90,15 @@ class MainActivity : FragmentActivity() {
 
     var backMenuActive : Boolean = false
     var selectedBackMenu = 4;
+    var changeMin : Boolean = false
+    var changeMax : Boolean = false
+    var minValue = 5
+    var maxValue = 12
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val display: Display = windowManager.defaultDisplay
         val size = Point()
@@ -96,15 +106,37 @@ class MainActivity : FragmentActivity() {
         width = size.x
         height = size.y
 
+        var clock : ImageView = findViewById(R.id.imageView)
+        var centerPointX = width/2
+        var centerPointY = height/2
+        var radius = (height/2)-100
+        var x = centerPointX+(radius*cos(Math.toRadians(-90.0)))
+        var y = centerPointY+(radius*sin(Math.toRadians(-90.0)))
+        lastPoint.set(x.toFloat(),y.toFloat())
+        var animation  = TranslateAnimation(0f, x.toFloat(),0f, y.toFloat())
+        animation.fillAfter = true
+        animation.duration = 1
+        clock.startAnimation(animation)
+
         val sudLL : LinearLayout = findViewById(R.id.sudMenu)
         sudLL.visibility = View.VISIBLE
-        soundPool = SoundPool(7, AudioManager.STREAM_MUSIC, 100)
-    }
-
-    override fun onResume() {
-        soundPool!!.load(this, R.raw.sud, 1)
-        streamID = soundPool!!.play(1, 100f, 100f, 1, 0, 1f)
-        super.onResume()
+        soundPool = SoundPool(2, AudioManager.STREAM_MUSIC, 100)
+        soundPool!!.setOnLoadCompleteListener(object : SoundPool.OnLoadCompleteListener{
+            override fun onLoadComplete(soundPool: SoundPool?, sampleId: Int, status: Int) {
+                if(sampleId==6) {
+                    streamID = soundPool!!.play(sudID, 100f, 100f, 1, 0, 1f)
+                    var tvLoading : TextView = findViewById(R.id.loading)
+                    tvLoading.visibility=View.GONE
+                }
+            }
+        })
+        attendToNegativeID=soundPool!!.load(this, R.raw.attend_to_negative, 1)
+        blinkID=soundPool!!.load(this, R.raw.blink, 1)
+        doDeepInspirationID=soundPool!!.load(this, R.raw.do_deep_inspiration, 1)
+        setPointNegativeID=soundPool!!.load(this, R.raw.set_point_negative, 1)
+        setResourcePointID=soundPool!!.load(this, R.raw.set_resource_point, 1)
+        sudID=soundPool!!.load(this, R.raw.sud, 1)
+        wooshID=soundPool!!.load(this, R.raw.wooosh, 1)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -112,6 +144,8 @@ class MainActivity : FragmentActivity() {
             val rl: RelativeLayout = findViewById(R.id.root)
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    changeMax=false
+                    changeMin=false
                     if (sudMenuActive&&!backMenuActive&&!colorSettingActive) {
                         currSUDmenuItemID--
                         if (currSUDmenuItemID < 1)
@@ -146,7 +180,7 @@ class MainActivity : FragmentActivity() {
                     }
                     else if(backMenuActive&&!colorSettingActive){
                         selectedBackMenu--
-                        if (selectedBackMenu<1) selectedBackMenu=4
+                        if (selectedBackMenu<1) selectedBackMenu=6
                         backItemChange()
                     }
                     else if (colorSettingActive){
@@ -156,6 +190,8 @@ class MainActivity : FragmentActivity() {
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    changeMax=false
+                    changeMin=false
                     if (sudMenuActive&&!backMenuActive&&!colorSettingActive) {
                         currSUDmenuItemID++
                         if (currSUDmenuItemID > 10)
@@ -190,7 +226,7 @@ class MainActivity : FragmentActivity() {
                     }
                     else if(backMenuActive&&!colorSettingActive){
                         selectedBackMenu++
-                        if (selectedBackMenu>4) selectedBackMenu=1
+                        if (selectedBackMenu>6) selectedBackMenu=1
                         backItemChange()
                     }
                     else if (colorSettingActive){
@@ -200,35 +236,59 @@ class MainActivity : FragmentActivity() {
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_UP -> {
-                    if (setNegativePointActive&&!colorSettingActive){
+                    if (setNegativePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
                         GlobalScope.launch { translateLeft(0f) }
                     }
-                    else if (setResourcePointActive&&!colorSettingActive){
+                    else if (setResourcePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
                         GlobalScope.launch { translateRight() }
                     }
-                    else if (colorSettingActive){
+                    else if (colorSettingActive&&!changeMax&&!changeMin){
                         currentColorID++
                         if (currentColorID>20)currentColorID=0
                         rl.setBackgroundColor(colors[currentColorID])
                     }
+                    else if(changeMin){
+                        minValue++
+                        if (minValue>=maxValue)
+                            minValue--
+                        updateMinValue()
+
+                    }
+                    else if(changeMax){
+                        maxValue++
+                        updateMaxValue()
+                    }
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    if (setNegativePointActive&&!colorSettingActive){
+                    if (setNegativePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
                         GlobalScope.launch { translateLeft(0f) }
                     }
-                    else if (setResourcePointActive&&!colorSettingActive){
+                    else if (setResourcePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
                         GlobalScope.launch { translateRight() }
                     }
-                    else if (colorSettingActive){
+                    else if (colorSettingActive&&!changeMax&&!changeMin){
                         currentColorID--
                         if (currentColorID<0)currentColorID=20
                         rl.setBackgroundColor(colors[currentColorID])
+                    }
+                    else if(changeMin){
+                        minValue--
+                        if (minValue<1)
+                            minValue++
+                        updateMinValue()
+                    }
+                    else if(changeMax){
+                        maxValue--
+                        if (maxValue<=minValue)
+                            maxValue++
+                        updateMaxValue()
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
                     if (sudMenuActive&&!backMenuActive&&!colorSettingActive) {
                         selectedSUDnum = currSUDmenuItemID
-                        soundPool?.stop(streamID!!)
+                        if (soundPool!=null&&streamID!=null)
+                            soundPool?.stop(streamID!!)
                         val sudLL : LinearLayout = findViewById(R.id.sudMenu)
                         sudLL.visibility = View.GONE
                         sudMenuActive = false
@@ -236,6 +296,7 @@ class MainActivity : FragmentActivity() {
                     }
                     else if(setNegativePointActive&&!backMenuActive&&!colorSettingActive){
                         negativeAngle = rotateAngle
+                        negativePoint = lastPoint
                         setNegativePointActive = false
                         setResource()
                     }
@@ -325,6 +386,15 @@ class MainActivity : FragmentActivity() {
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         keypressed = false
         return super.onKeyUp(keyCode, event)
+    }
+
+    private fun updateMaxValue(){
+        var tvmax : TextView = findViewById(R.id.backMAX)
+        tvmax.text = maxValue.toString()
+    }
+    private fun updateMinValue(){
+        var tvmin : TextView = findViewById(R.id.backMIN)
+        tvmin.text = minValue.toString()
     }
 
     private fun sudItemChange(){
@@ -468,9 +538,11 @@ class MainActivity : FragmentActivity() {
         var tvColor : TextView = findViewById(R.id.BackColor)
         var tvRestart : TextView = findViewById(R.id.backRestart)
         var tvCancel : TextView = findViewById(R.id.backCancel)
+        var tvBackMin : TextView = findViewById(R.id.backMIN)
+        var tvBackMax : TextView = findViewById(R.id.backMAX)
         when(selectedBackMenu){
             1->{
-                tvCancel.setBackgroundColor(Color.WHITE)
+                tvBackMax.setBackgroundColor(Color.WHITE)
                 tvExit.setBackgroundColor(Color.rgb(62,62,62))
                 tvColor.setBackgroundColor(Color.WHITE)
             }
@@ -487,14 +559,26 @@ class MainActivity : FragmentActivity() {
             4->{
                 tvRestart.setBackgroundColor(Color.WHITE)
                 tvCancel.setBackgroundColor(Color.rgb(62,62,62))
+                tvBackMin.setBackgroundColor(Color.WHITE)
+            }
+            5->{
+                changeMin = true
+                tvCancel.setBackgroundColor(Color.WHITE)
+                tvBackMin.setBackgroundColor(Color.rgb(62,62,62))
+                tvBackMax.setBackgroundColor(Color.WHITE)
+            }
+            6->{
+                changeMax = true
+                tvBackMin.setBackgroundColor(Color.WHITE)
+                tvBackMax.setBackgroundColor(Color.rgb(62,62,62))
                 tvExit.setBackgroundColor(Color.WHITE)
             }
         }
     }
 
     private fun sudLarge(){
-        soundPool!!.load(this, R.raw.sud, 1)
-        streamID = soundPool!!.play(1, 100f, 100f, 1, 0, 1f)
+        deep=0
+        streamID = soundPool!!.play(sudID, 100f, 100f, 1, 0, 1f)
         var sudMenuLarge : LinearLayout = findViewById(R.id.sudMenuLarge)
         this@MainActivity.runOnUiThread(java.lang.Runnable {
             sudMenuLarge.visibility = View.VISIBLE
@@ -505,99 +589,63 @@ class MainActivity : FragmentActivity() {
 
     private fun setNegative(){
         val clock : ImageView = findViewById(R.id.imageView)
-        var centerPointX = width/2
-        var centerPointY = height/2
-        var radius = (height/2)-100
-        var x = centerPointX+(radius*cos(Math.toRadians(-90.0)))
-        var y = centerPointY+(radius*sin(Math.toRadians(-90.0)))
-        var animation  = TranslateAnimation(0f, x.toFloat(),0f, y.toFloat())
-        animation.fillAfter = true
-        clock.startAnimation(animation)
         clock.visibility = View.VISIBLE
         setNegativePointActive = true
         soundPool!!.stop(streamID!!)
-        soundPool!!.load(this, R.raw.set_point_negative, 2)
-        streamID = soundPool!!.play(2, 100f, 100f, 1, 0, 1f)
+        streamID = soundPool!!.play(setPointNegativeID, 100f, 100f, 1, 0, 1f)
     }
 
     private fun setResource(){
         setResourcePointActive = true
         soundPool!!.stop(streamID!!)
-        soundPool!!.load(this, R.raw.set_resource_point, 3)
-        streamID = soundPool!!.play(3, 100f, 100f, 1, 0, 1f)
+        streamID = soundPool!!.play(setResourcePointID, 100f, 100f, 1, 0, 1f)
     }
 
     private fun partTwo(){
         deep++
         partTwoActive = true
         soundPool!!.stop(streamID!!)
-        soundPool!!.load(this, R.raw.attend_to_negative, 4)
-        streamID = soundPool!!.play(4, 100f, 100f, 1, 0, 1f)
-        var rand = Random()
-        var delay = 5+rand.nextInt(7)
-        Thread.sleep(delay.toLong())
+        streamID = soundPool!!.play(attendToNegativeID, 100f, 100f, 1, 0, 1f)
         var ctx : Context = this
         GlobalScope.launch { moveToPositive(ctx) }
     }
 
-    /*suspend fun rotateLeft(width: Int, height: Int) = coroutineScope{
-        launch{
-            val clock : ImageView = findViewById(R.id.imageView)
-            while (keypressed){
-                var animation = RotateAnimation(rotateAngle, rotateAngle-0.5f, (clock.width/2).toFloat(), (clock.height/2).toFloat())
-                animation.fillAfter = true
-                rotateAngle-=0.5f
-                if (rotateAngle<-360) rotateAngle=0f
-                clock.startAnimation(animation)
-                Thread.sleep(50)
-            }
-        }
-    }
-    suspend fun rotateRight(width: Int, height: Int) = coroutineScope{
-        launch{
-            val clock : ImageView = findViewById(R.id.imageView)
-            while (keypressed){
-                var animation = RotateAnimation(rotateAngle, rotateAngle+0.5f, (clock.width/2).toFloat(), (clock.height/2).toFloat())
-                animation.fillAfter = true
-                rotateAngle+=0.5f
-                if (rotateAngle>360) rotateAngle=0f
-                clock.startAnimation(animation)
-                Thread.sleep(50)
-            }
-        }
-    }*/
     suspend fun moveToPositive(ctx : Context) = coroutineScope {
         launch {
-            Log.i("suspe", "1")
-            soundPool!!.stop(streamID!!)
-            soundPool!!.load(ctx, R.raw.wooosh, 5)
-            streamID = soundPool!!.play(5, 100f, 100f, 1, 0, 1f)
+            var rand = Random()
+            var delay = 1000*(minValue+rand.nextInt(maxValue-minValue))
+            Thread.sleep(delay.toLong())
             var animation = TranslateAnimation(negativePoint.x, resourcePoint.x, negativePoint.y, resourcePoint.y)
-            animation.duration=500
+            rotateAngle = resourceAngle
+            animation.duration = 500;
             animation.fillAfter = true
             val clock : ImageView = findViewById(R.id.imageView)
-            clock.startAnimation(animation)
-            Thread.sleep(20)
             soundPool!!.stop(streamID!!)
-            soundPool!!.load(ctx, R.raw.blink, 6)
-            streamID = soundPool!!.play(6, 100f, 100f, 1, 0, 1f)
+            streamID = soundPool!!.play(wooshID, 500f, 500f, 1, 0, 1f)
+            clock.startAnimation(animation)
+            lastPoint.set(resourcePoint.x, resourcePoint.y)
+            Thread.sleep(500)
+            soundPool!!.stop(streamID!!)
+            streamID = soundPool!!.play(blinkID, 100f, 100f, 2, 0, 1f)
             Thread.sleep(1000)
             translateLeft(negativeAngle)
-            if (deep==3){
+            if (deep>=3) {
                 soundPool!!.stop(streamID!!)
-                soundPool!!.load(ctx, R.raw.do_deep_inspiration, 7)
-                streamID = soundPool!!.play(7, 100f, 100f, 1, 0, 1f)
+                streamID = soundPool!!.play(doDeepInspirationID, 100f, 100f, 1, 0, 1f)
+                this@MainActivity.runOnUiThread(java.lang.Runnable {
+                    clock.visibility = View.GONE
+                })
+                Thread.sleep(2200)
+                partTwoActive = false
+                sudLarge()
             }
-            this@MainActivity.runOnUiThread(java.lang.Runnable {
-                clock.visibility = View.GONE
-            })
-            partTwoActive = false
-            sudLarge()
+            else{
+                partTwo()
+            }
         }
     }
     suspend fun translateLeft(endAngle : Float) = coroutineScope {
         launch {
-            Log.i("suspe", "2")
             var centerPointX = width/2
             var centerPointY = height/2
             var radius = (height/2)-100
@@ -613,6 +661,8 @@ class MainActivity : FragmentActivity() {
                     lastPoint.x = xaar.toFloat()
                     lastPoint.y = yaar.toFloat()
                     animation.fillAfter = true
+                    animation.duration = 25
+                    animation.interpolator = LinearInterpolator()
                     clock.startAnimation(animation)
                     Thread.sleep(25)
                 }
@@ -636,7 +686,6 @@ class MainActivity : FragmentActivity() {
     }
     suspend fun translateRight() = coroutineScope {
         launch {
-            Log.i("suspe", "3")
             var centerPointX = width/2
             var centerPointY = height/2
             var radius = (height/2)-100
@@ -649,6 +698,7 @@ class MainActivity : FragmentActivity() {
                 var animation = TranslateAnimation(lastPoint.x, xaar.toFloat(), lastPoint.y, yaar.toFloat())
                 lastPoint.x= xaar.toFloat()
                 lastPoint.y = yaar.toFloat()
+                resourcePoint.set(lastPoint.x, lastPoint.y)
                 animation.fillAfter = true
                 clock.startAnimation(animation)
                 Thread.sleep(25)
