@@ -1,33 +1,59 @@
 package com.kwork.whoosh
 
+import android.content.Context
 import android.graphics.Color
 import android.media.AudioManager
 import android.media.SoundPool
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
-import android.view.animation.RotateAnimation
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import android.graphics.Point
 import android.graphics.PointF
-import android.util.Log
 import android.view.Display
-import android.view.animation.Animation
 import android.view.animation.TranslateAnimation
 import android.widget.ImageView
 import kotlinx.coroutines.*
 import java.util.*
 import kotlin.math.cos
 import kotlin.math.sin
+import android.content.Intent
+import android.util.Log
 
 
 /**
  * Loads [MainFragment].
  */
 class MainActivity : FragmentActivity() {
+    val colors : List<Int> = listOf(Color.rgb(229,28,35),
+        Color.rgb(233,30,99),
+        Color.rgb(156,39,176),
+        Color.rgb(103,58,183),
+        Color.rgb(63,81,181),
+        Color.rgb(86,119,252),
+        Color.rgb(3,169,244),
+        Color.rgb(0,188,212),
+        Color.rgb(0,150,136),
+        Color.rgb(37,155,36),
+        Color.rgb(139,195,74),
+        Color.rgb(205,220,57),
+        Color.rgb(255,235,59),
+        Color.rgb(255,193,7),
+        Color.rgb(255,152,0),
+        Color.rgb(255,87,34),
+        Color.rgb(121,85,72),
+        Color.rgb(158,158,158),
+        Color.rgb(96,125,139),
+        Color.rgb(255,255,255),
+        Color.rgb(0,0,0)
+    )
+    var currentColorID = 20
+    var prevColorID = 20
+    var colorSettingActive : Boolean = false
+
     var width: Int = 0
     var height: Int = 0
     var keypressed : Boolean = false
@@ -42,12 +68,23 @@ class MainActivity : FragmentActivity() {
 
     var setNegativePointActive : Boolean = false
     var rotateAngle = -90f
-    var negativeValue = 0f//0-360
+    var negativeAngle = 0f//0-360
+    var negativePoint : PointF = PointF(0f,0f)
 
     var setResourcePointActive : Boolean = false
-    var resourceValue = 0f//0-360
+    var resourceAngle = 0f//0-360
+    var resourcePoint : PointF = PointF(0f,0f)
 
     var partTwoActive : Boolean = false
+    var deep : Int = 0
+
+    var sudMenuLargeActive : Boolean = false
+
+    var gratitude : Boolean = false
+    var selectedGratitude = 2
+
+    var backMenuActive : Boolean = false
+    var selectedBackMenu = 4;
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,8 +99,6 @@ class MainActivity : FragmentActivity() {
         val sudLL : LinearLayout = findViewById(R.id.sudMenu)
         sudLL.visibility = View.VISIBLE
         soundPool = SoundPool(7, AudioManager.STREAM_MUSIC, 100)
-
-
     }
 
     override fun onResume() {
@@ -77,51 +112,121 @@ class MainActivity : FragmentActivity() {
             val rl: RelativeLayout = findViewById(R.id.root)
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    if (sudMenuActive) {
+                    if (sudMenuActive&&!backMenuActive&&!colorSettingActive) {
                         currSUDmenuItemID--
                         if (currSUDmenuItemID < 1)
                             currSUDmenuItemID = 10
                         sudItemChange()
                     }
-                    else if (setNegativePointActive){
-                        GlobalScope.launch { translateLeft() }
+                    else if (setNegativePointActive&&!backMenuActive&&!colorSettingActive){
+                        GlobalScope.launch { translateLeft(0f) }
                     }
-                    else if (setResourcePointActive){
+                    else if (setResourcePointActive&&!backMenuActive&&!colorSettingActive){
                         GlobalScope.launch { translateRight() }
+                    }
+                    else if (sudMenuLargeActive&&!backMenuActive&&!colorSettingActive){
+                        currSUDmenuItemID--
+                        if (currSUDmenuItemID < 0)
+                            currSUDmenuItemID = 10
+                        sudItemLargeChange()
+                    }
+                    else if(gratitude&&!backMenuActive&&!colorSettingActive){
+                        var tvExit : TextView = findViewById(R.id.exit)
+                        var tvRestart : TextView = findViewById(R.id.restart)
+                        if (selectedGratitude==2) {
+                            selectedGratitude=1
+                            tvExit.setBackgroundColor(Color.rgb(62,62,62))
+                            tvRestart.setBackgroundColor(Color.WHITE)
+                        }
+                        else {
+                            selectedGratitude=2
+                            tvExit.setBackgroundColor(Color.WHITE)
+                            tvRestart.setBackgroundColor(Color.rgb(62,62,62))
+                        }
+                    }
+                    else if(backMenuActive&&!colorSettingActive){
+                        selectedBackMenu--
+                        if (selectedBackMenu<1) selectedBackMenu=4
+                        backItemChange()
+                    }
+                    else if (colorSettingActive){
+                        currentColorID--
+                        if (currentColorID<0)currentColorID=20
+                        rl.setBackgroundColor(colors[currentColorID])
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    if (sudMenuActive) {
+                    if (sudMenuActive&&!backMenuActive&&!colorSettingActive) {
                         currSUDmenuItemID++
                         if (currSUDmenuItemID > 10)
                             currSUDmenuItemID = 1
                         sudItemChange()
                     }
-                    else if (setNegativePointActive){
-                        GlobalScope.launch { translateLeft() }
+                    else if (setNegativePointActive&&!backMenuActive&&!colorSettingActive){
+                        GlobalScope.launch { translateLeft(0f) }
                     }
-                    else if (setResourcePointActive){
+                    else if (setResourcePointActive&&!backMenuActive&&!colorSettingActive){
                         GlobalScope.launch { translateRight() }
+                    }
+                    else if (sudMenuLargeActive&&!backMenuActive&&!colorSettingActive){
+                        currSUDmenuItemID++
+                        if (currSUDmenuItemID > 10)
+                            currSUDmenuItemID = 0
+                        sudItemLargeChange()
+                    }
+                    else if(gratitude&&!backMenuActive&&!colorSettingActive){
+                        var tvExit : TextView = findViewById(R.id.exit)
+                        var tvRestart : TextView = findViewById(R.id.restart)
+                        if (selectedGratitude==2) {
+                            selectedGratitude=1
+                            tvExit.setBackgroundColor(Color.rgb(62,62,62))
+                            tvRestart.setBackgroundColor(Color.WHITE)
+                        }
+                        else {
+                            selectedGratitude=2
+                            tvExit.setBackgroundColor(Color.WHITE)
+                            tvRestart.setBackgroundColor(Color.rgb(62,62,62))
+                        }
+                    }
+                    else if(backMenuActive&&!colorSettingActive){
+                        selectedBackMenu++
+                        if (selectedBackMenu>4) selectedBackMenu=1
+                        backItemChange()
+                    }
+                    else if (colorSettingActive){
+                        currentColorID++
+                        if (currentColorID>20)currentColorID=0
+                        rl.setBackgroundColor(colors[currentColorID])
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_UP -> {
-                    if (setNegativePointActive){
-                        GlobalScope.launch { translateLeft() }
+                    if (setNegativePointActive&&!colorSettingActive){
+                        GlobalScope.launch { translateLeft(0f) }
                     }
-                    else if (setResourcePointActive){
+                    else if (setResourcePointActive&&!colorSettingActive){
                         GlobalScope.launch { translateRight() }
+                    }
+                    else if (colorSettingActive){
+                        currentColorID++
+                        if (currentColorID>20)currentColorID=0
+                        rl.setBackgroundColor(colors[currentColorID])
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    if (setNegativePointActive){
-                        GlobalScope.launch { translateLeft() }
+                    if (setNegativePointActive&&!colorSettingActive){
+                        GlobalScope.launch { translateLeft(0f) }
                     }
-                    else if (setResourcePointActive){
+                    else if (setResourcePointActive&&!colorSettingActive){
                         GlobalScope.launch { translateRight() }
+                    }
+                    else if (colorSettingActive){
+                        currentColorID--
+                        if (currentColorID<0)currentColorID=20
+                        rl.setBackgroundColor(colors[currentColorID])
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
-                    if (sudMenuActive) {
+                    if (sudMenuActive&&!backMenuActive&&!colorSettingActive) {
                         selectedSUDnum = currSUDmenuItemID
                         soundPool?.stop(streamID!!)
                         val sudLL : LinearLayout = findViewById(R.id.sudMenu)
@@ -129,37 +234,87 @@ class MainActivity : FragmentActivity() {
                         sudMenuActive = false
                         setNegative()
                     }
-                    else if(setNegativePointActive){
-                        negativeValue = rotateAngle
+                    else if(setNegativePointActive&&!backMenuActive&&!colorSettingActive){
+                        negativeAngle = rotateAngle
                         setNegativePointActive = false
                         setResource()
                     }
-                    else if(setResourcePointActive) {
-                        resourceValue = rotateAngle
-                        val clock: ImageView = findViewById(R.id.imageView)
-                        var duration =
-                            (1000 * (Math.abs(resourceValue) + Math.abs(negativeValue))) / 45
-                        var animation = RotateAnimation(
-                            rotateAngle,
-                            negativeValue,
-                            (clock.width / 2).toFloat(),
-                            (clock.height / 2).toFloat()
-                        )
-                        animation.fillAfter = true
-                        animation.duration = (duration).toLong()
-                        animation.setAnimationListener(object : Animation.AnimationListener {
-                            override fun onAnimationRepeat(animation: Animation?) {}
-                            override fun onAnimationStart(animation: Animation?) {}
-                            override fun onAnimationEnd(animation: Animation?) {
-                                partTwo()
-                                setResourcePointActive = false
-                            }
-                        })
-                        clock.startAnimation(animation)
+                    else if(setResourcePointActive&&!backMenuActive&&!colorSettingActive) {
+                        resourceAngle = rotateAngle
+                        GlobalScope.launch { translateLeft(negativeAngle) }
+                        setResourcePointActive = false
+                        partTwo()
                     }
+                    else if(sudMenuLargeActive&&!backMenuActive&&!colorSettingActive){
+                        sudMenuLargeActive = false
+                        val sudLargeL : LinearLayout = findViewById(R.id.sudMenuLarge)
+                        sudLargeL.visibility = View.GONE
+                        if (currSUDmenuItemID!=0) setNegative()
+                        else{
+                            var gratitudeLayout : LinearLayout = findViewById(R.id.gratitude)
+                            gratitudeLayout.visibility = View.VISIBLE
+                            gratitude = true
+                        }
+                    }
+                    else if(gratitude&&!backMenuActive&&!colorSettingActive){
+                        when(selectedGratitude){
+                            1->{
+                                finishAffinity()
+                            }
+                            2->{
+                                val intent = intent
+                                finish()
+                                startActivity(intent)
+                            }
+                        }
+                    }
+                    else if(backMenuActive&&!colorSettingActive) {
+                        when(selectedBackMenu){
+                            1->{
+                                finishAffinity()
+                            }
+                            2->{
+                                colorSettingActive = true
+                                var tvColorSetting : TextView = findViewById(R.id.colorSetting)
+                                tvColorSetting.visibility = View.VISIBLE
+                            }
+                            3->{
+                                val intent = intent
+                                finish()
+                                startActivity(intent)
+                            }
+                        }
+                        backMenuActive=false
+                        val backLayout : LinearLayout = findViewById(R.id.backMenu)
+                        backLayout.visibility = View.GONE
+                    }
+                    else if(colorSettingActive){
+                        colorSettingActive=false
+                        var tvColorSetting : TextView = findViewById(R.id.colorSetting)
+                        tvColorSetting.visibility = View.GONE
+                    }
+
                 }
                 KeyEvent.KEYCODE_BACK -> {
-
+                    if (colorSettingActive){
+                        colorSettingActive=false
+                        var tvColorSetting : TextView = findViewById(R.id.colorSetting)
+                        tvColorSetting.visibility = View.GONE
+                        rl.setBackgroundColor(colors[prevColorID])
+                        currentColorID = prevColorID
+                        return true
+                    }
+                    val backMenu: LinearLayout = findViewById(R.id.backMenu)
+                    if(!backMenuActive) {
+                        backMenu.visibility = View.VISIBLE
+                        backMenuActive = true
+                        return true
+                    }
+                    else{
+                        backMenu.visibility = View.GONE
+                        backMenuActive = false
+                        return true
+                    }
                 }
             }
         }
@@ -237,14 +392,127 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    fun setNegative(){
+    private fun sudItemLargeChange(){
+        val tv0 : TextView = findViewById(R.id.textView0)
+        val tv1 : TextView = findViewById(R.id.ltextView1)
+        val tv2 : TextView = findViewById(R.id.ltextView2)
+        val tv3 : TextView = findViewById(R.id.ltextView3)
+        val tv4 : TextView = findViewById(R.id.ltextView4)
+        val tv5 : TextView = findViewById(R.id.ltextView5)
+        val tv6 : TextView = findViewById(R.id.ltextView6)
+        val tv7 : TextView = findViewById(R.id.ltextView7)
+        val tv8 : TextView = findViewById(R.id.ltextView8)
+        val tv9 : TextView = findViewById(R.id.ltextView9)
+        val tv10 : TextView = findViewById(R.id.ltextView10)
+        when(currSUDmenuItemID){
+            0->{
+                tv10.setBackgroundColor(Color.WHITE)
+                tv0.setBackgroundColor(Color.rgb(62,62,62))
+                tv1.setBackgroundColor(Color.WHITE)
+            }
+            1->{
+                tv0.setBackgroundColor(Color.WHITE)
+                tv1.setBackgroundColor(Color.rgb(62,62,62))
+                tv2.setBackgroundColor(Color.WHITE)
+            }
+            2->{
+                tv1.setBackgroundColor(Color.WHITE)
+                tv2.setBackgroundColor(Color.rgb(62,62,62))
+                tv3.setBackgroundColor(Color.WHITE)
+            }
+            3->{
+                tv2.setBackgroundColor(Color.WHITE)
+                tv3.setBackgroundColor(Color.rgb(62,62,62))
+                tv4.setBackgroundColor(Color.WHITE)
+            }
+            4->{
+                tv3.setBackgroundColor(Color.WHITE)
+                tv4.setBackgroundColor(Color.rgb(62,62,62))
+                tv5.setBackgroundColor(Color.WHITE)
+            }
+            5->{
+                tv4.setBackgroundColor(Color.WHITE)
+                tv5.setBackgroundColor(Color.rgb(62,62,62))
+                tv6.setBackgroundColor(Color.WHITE)
+            }
+            6->{
+                tv5.setBackgroundColor(Color.WHITE)
+                tv6.setBackgroundColor(Color.rgb(62,62,62))
+                tv7.setBackgroundColor(Color.WHITE)
+            }
+            7->{
+                tv6.setBackgroundColor(Color.WHITE)
+                tv7.setBackgroundColor(Color.rgb(62,62,62))
+                tv8.setBackgroundColor(Color.WHITE)
+            }
+            8->{
+                tv7.setBackgroundColor(Color.WHITE)
+                tv8.setBackgroundColor(Color.rgb(62,62,62))
+                tv9.setBackgroundColor(Color.WHITE)
+            }
+            9->{
+                tv8.setBackgroundColor(Color.WHITE)
+                tv9.setBackgroundColor(Color.rgb(62,62,62))
+                tv10.setBackgroundColor(Color.WHITE)
+            }
+            10->{
+                tv9.setBackgroundColor(Color.WHITE)
+                tv10.setBackgroundColor(Color.rgb(62,62,62))
+                tv0.setBackgroundColor(Color.WHITE)
+            }
+        }
+    }
+
+    private fun backItemChange(){
+        var tvExit : TextView = findViewById(R.id.backExit)
+        var tvColor : TextView = findViewById(R.id.BackColor)
+        var tvRestart : TextView = findViewById(R.id.backRestart)
+        var tvCancel : TextView = findViewById(R.id.backCancel)
+        when(selectedBackMenu){
+            1->{
+                tvCancel.setBackgroundColor(Color.WHITE)
+                tvExit.setBackgroundColor(Color.rgb(62,62,62))
+                tvColor.setBackgroundColor(Color.WHITE)
+            }
+            2->{
+                tvExit.setBackgroundColor(Color.WHITE)
+                tvColor.setBackgroundColor(Color.rgb(62,62,62))
+                tvRestart.setBackgroundColor(Color.WHITE)
+            }
+            3->{
+                tvColor.setBackgroundColor(Color.WHITE)
+                tvRestart.setBackgroundColor(Color.rgb(62,62,62))
+                tvCancel.setBackgroundColor(Color.WHITE)
+            }
+            4->{
+                tvRestart.setBackgroundColor(Color.WHITE)
+                tvCancel.setBackgroundColor(Color.rgb(62,62,62))
+                tvExit.setBackgroundColor(Color.WHITE)
+            }
+        }
+    }
+
+    private fun sudLarge(){
+        soundPool!!.load(this, R.raw.sud, 1)
+        streamID = soundPool!!.play(1, 100f, 100f, 1, 0, 1f)
+        var sudMenuLarge : LinearLayout = findViewById(R.id.sudMenuLarge)
+        this@MainActivity.runOnUiThread(java.lang.Runnable {
+            sudMenuLarge.visibility = View.VISIBLE
+            sudItemLargeChange()
+        })
+        sudMenuLargeActive = true
+    }
+
+    private fun setNegative(){
         val clock : ImageView = findViewById(R.id.imageView)
         var centerPointX = width/2
         var centerPointY = height/2
         var radius = (height/2)-100
         var x = centerPointX+(radius*cos(Math.toRadians(-90.0)))
         var y = centerPointY+(radius*sin(Math.toRadians(-90.0)))
-        clock.startAnimation(TranslateAnimation(0f, x.toFloat(),0f, y.toFloat()))
+        var animation  = TranslateAnimation(0f, x.toFloat(),0f, y.toFloat())
+        animation.fillAfter = true
+        clock.startAnimation(animation)
         clock.visibility = View.VISIBLE
         setNegativePointActive = true
         soundPool!!.stop(streamID!!)
@@ -252,14 +520,15 @@ class MainActivity : FragmentActivity() {
         streamID = soundPool!!.play(2, 100f, 100f, 1, 0, 1f)
     }
 
-    fun setResource(){
+    private fun setResource(){
         setResourcePointActive = true
         soundPool!!.stop(streamID!!)
         soundPool!!.load(this, R.raw.set_resource_point, 3)
         streamID = soundPool!!.play(3, 100f, 100f, 1, 0, 1f)
     }
 
-    fun partTwo(){
+    private fun partTwo(){
+        deep++
         partTwoActive = true
         soundPool!!.stop(streamID!!)
         soundPool!!.load(this, R.raw.attend_to_negative, 4)
@@ -267,6 +536,8 @@ class MainActivity : FragmentActivity() {
         var rand = Random()
         var delay = 5+rand.nextInt(7)
         Thread.sleep(delay.toLong())
+        var ctx : Context = this
+        GlobalScope.launch { moveToPositive(ctx) }
     }
 
     /*suspend fun rotateLeft(width: Int, height: Int) = coroutineScope{
@@ -295,28 +566,77 @@ class MainActivity : FragmentActivity() {
             }
         }
     }*/
-    suspend fun translateLeft() = coroutineScope {
+    suspend fun moveToPositive(ctx : Context) = coroutineScope {
         launch {
+            Log.i("suspe", "1")
+            soundPool!!.stop(streamID!!)
+            soundPool!!.load(ctx, R.raw.wooosh, 5)
+            streamID = soundPool!!.play(5, 100f, 100f, 1, 0, 1f)
+            var animation = TranslateAnimation(negativePoint.x, resourcePoint.x, negativePoint.y, resourcePoint.y)
+            animation.duration=500
+            animation.fillAfter = true
+            val clock : ImageView = findViewById(R.id.imageView)
+            clock.startAnimation(animation)
+            Thread.sleep(20)
+            soundPool!!.stop(streamID!!)
+            soundPool!!.load(ctx, R.raw.blink, 6)
+            streamID = soundPool!!.play(6, 100f, 100f, 1, 0, 1f)
+            Thread.sleep(1000)
+            translateLeft(negativeAngle)
+            if (deep==3){
+                soundPool!!.stop(streamID!!)
+                soundPool!!.load(ctx, R.raw.do_deep_inspiration, 7)
+                streamID = soundPool!!.play(7, 100f, 100f, 1, 0, 1f)
+            }
+            this@MainActivity.runOnUiThread(java.lang.Runnable {
+                clock.visibility = View.GONE
+            })
+            partTwoActive = false
+            sudLarge()
+        }
+    }
+    suspend fun translateLeft(endAngle : Float) = coroutineScope {
+        launch {
+            Log.i("suspe", "2")
             var centerPointX = width/2
             var centerPointY = height/2
             var radius = (height/2)-100
             val clock : ImageView = findViewById(R.id.imageView)
-        while (keypressed) {
-                rotateAngle-=0.5f
-                if (rotateAngle<-360) rotateAngle = -0.5f
-                var xaar = centerPointX+(radius*cos(Math.toRadians(rotateAngle.toDouble())))
-                var yaar = centerPointY+(radius*sin(Math.toRadians(rotateAngle.toDouble())))
-                var animation = TranslateAnimation(lastPoint.x, xaar.toFloat(), lastPoint.y, yaar.toFloat())
-                lastPoint.x= xaar.toFloat()
-                lastPoint.y = yaar.toFloat()
-                animation.fillAfter = true
-                clock.startAnimation(animation)
-                Thread.sleep(25)
+            if (endAngle==0f) {
+                while (keypressed) {
+                    rotateAngle -= 0.5f
+                    if (rotateAngle < -360) rotateAngle = -0.5f
+                    var xaar = centerPointX + (radius * cos(Math.toRadians(rotateAngle.toDouble())))
+                    var yaar = centerPointY + (radius * sin(Math.toRadians(rotateAngle.toDouble())))
+                    var animation =
+                        TranslateAnimation(lastPoint.x, xaar.toFloat(), lastPoint.y, yaar.toFloat())
+                    lastPoint.x = xaar.toFloat()
+                    lastPoint.y = yaar.toFloat()
+                    animation.fillAfter = true
+                    clock.startAnimation(animation)
+                    Thread.sleep(25)
+                }
+            }
+            else{
+                while (rotateAngle!=endAngle) {
+                    rotateAngle -= 0.5f
+                    if (rotateAngle < -360) rotateAngle = -0.5f
+                    var xaar = centerPointX + (radius * cos(Math.toRadians(rotateAngle.toDouble())))
+                    var yaar = centerPointY + (radius * sin(Math.toRadians(rotateAngle.toDouble())))
+                    var animation =
+                        TranslateAnimation(lastPoint.x, xaar.toFloat(), lastPoint.y, yaar.toFloat())
+                    lastPoint.x = xaar.toFloat()
+                    lastPoint.y = yaar.toFloat()
+                    animation.fillAfter = true
+                    clock.startAnimation(animation)
+                    Thread.sleep(25)
+                }
             }
         }
     }
     suspend fun translateRight() = coroutineScope {
         launch {
+            Log.i("suspe", "3")
             var centerPointX = width/2
             var centerPointY = height/2
             var radius = (height/2)-100
