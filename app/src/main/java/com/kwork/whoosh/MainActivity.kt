@@ -14,14 +14,23 @@ import androidx.fragment.app.FragmentActivity
 import android.graphics.Point
 import android.graphics.PointF
 import android.view.Display
-import android.view.animation.TranslateAnimation
 import android.widget.ImageView
 import kotlinx.coroutines.*
 import java.util.*
 import kotlin.math.cos
 import kotlin.math.sin
 import android.view.WindowManager
-import android.view.animation.LinearInterpolator
+import android.animation.ValueAnimator
+import android.animation.ValueAnimator.AnimatorUpdateListener
+import android.renderscript.Float3
+import android.util.Log
+import android.util.TypedValue
+import android.view.animation.*
+import androidx.annotation.Dimension
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
+import java.util.concurrent.Flow
+
 
 class MainActivity : FragmentActivity() {
     val colors : List<Int> = listOf(Color.rgb(229,28,35),
@@ -46,6 +55,9 @@ class MainActivity : FragmentActivity() {
         Color.rgb(255,255,255),
         Color.rgb(0,0,0)
     )
+
+    var coords : MutableList<PointF> = mutableListOf()
+    var currentPosID = 2700
 
     var attendToNegativeID = 0
     var blinkID = 0
@@ -94,11 +106,13 @@ class MainActivity : FragmentActivity() {
     var changeMax : Boolean = false
     var minValue = 5
     var maxValue = 12
+    lateinit var ctx : Context
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        ctx = this
 
         val display: Display = windowManager.defaultDisplay
         val size = Point()
@@ -108,15 +122,17 @@ class MainActivity : FragmentActivity() {
 
         var clock : ImageView = findViewById(R.id.imageView)
         var centerPointX = width/2
-        var centerPointY = height/2
+        var centerPointY = height/2-50
         var radius = (height/2)-100
         var x = centerPointX+(radius*cos(Math.toRadians(-90.0)))
         var y = centerPointY+(radius*sin(Math.toRadians(-90.0)))
-        lastPoint.set(x.toFloat(),y.toFloat())
+        /*lastPoint.set(x.toFloat(),y.toFloat())
         var animation  = TranslateAnimation(0f, x.toFloat(),0f, y.toFloat())
         animation.fillAfter = true
         animation.duration = 1
-        clock.startAnimation(animation)
+        clock.startAnimation(animation)*/
+        clock.x = x.toFloat()
+        clock.y=y.toFloat()
 
         val sudLL : LinearLayout = findViewById(R.id.sudMenu)
         sudLL.visibility = View.VISIBLE
@@ -126,6 +142,15 @@ class MainActivity : FragmentActivity() {
                 if(sampleId==6) {
                     streamID = soundPool!!.play(sudID, 100f, 100f, 1, 0, 1f)
                     var tvLoading : TextView = findViewById(R.id.loading)
+                    var angle = 0f
+                    for (i in 0..3600){
+                        angle+=0.1f
+                        var xaar =
+                            (centerPointX + (radius * cos(Math.toRadians(angle.toDouble())))).toFloat()
+                        var yaar =
+                            (centerPointY + (radius * sin(Math.toRadians(angle.toDouble())))).toFloat()
+                        coords.add(i, PointF(xaar, yaar))
+                    }
                     tvLoading.visibility=View.GONE
                 }
             }
@@ -295,14 +320,10 @@ class MainActivity : FragmentActivity() {
                         setNegative()
                     }
                     else if(setNegativePointActive&&!backMenuActive&&!colorSettingActive){
-                        negativeAngle = rotateAngle
-                        negativePoint = lastPoint
                         setNegativePointActive = false
                         setResource()
                     }
                     else if(setResourcePointActive&&!backMenuActive&&!colorSettingActive) {
-                        resourceAngle = rotateAngle
-                        GlobalScope.launch { translateLeft(negativeAngle) }
                         setResourcePointActive = false
                         partTwo()
                     }
@@ -380,7 +401,7 @@ class MainActivity : FragmentActivity() {
             }
         }
         keypressed = true
-        return super.onKeyDown(keyCode, event)
+        return true
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
@@ -602,107 +623,140 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun partTwo(){
-        deep++
+        if (deep==0)
+            GlobalScope.launch { moveToPositive(ctx) }
+        else {
+            while (rotateAngle != negativeAngle) {
+                Thread.sleep(50)
+            }
+            soundPool!!.stop(streamID!!)
+            streamID = soundPool!!.play(attendToNegativeID, 100f, 100f, 1, 0, 1f)
+            var ctx: Context = this
+            GlobalScope.launch { moveToPositive(ctx) }
+        }
         partTwoActive = true
-        soundPool!!.stop(streamID!!)
-        streamID = soundPool!!.play(attendToNegativeID, 100f, 100f, 1, 0, 1f)
-        var ctx : Context = this
-        GlobalScope.launch { moveToPositive(ctx) }
+        deep++
     }
 
     suspend fun moveToPositive(ctx : Context) = coroutineScope {
         launch {
-            var rand = Random()
-            var delay = 1000*(minValue+rand.nextInt(maxValue-minValue))
-            Thread.sleep(delay.toLong())
-            var animation = TranslateAnimation(negativePoint.x, resourcePoint.x, negativePoint.y, resourcePoint.y)
-            rotateAngle = resourceAngle
-            animation.duration = 500;
-            animation.fillAfter = true
-            val clock : ImageView = findViewById(R.id.imageView)
-            soundPool!!.stop(streamID!!)
-            streamID = soundPool!!.play(wooshID, 500f, 500f, 1, 0, 1f)
-            clock.startAnimation(animation)
-            lastPoint.set(resourcePoint.x, resourcePoint.y)
-            Thread.sleep(500)
-            soundPool!!.stop(streamID!!)
-            streamID = soundPool!!.play(blinkID, 100f, 100f, 2, 0, 1f)
-            Thread.sleep(1000)
-            translateLeft(negativeAngle)
-            if (deep>=3) {
+            val clock: ImageView = findViewById(R.id.imageView)
+            if (deep!=1) {
+                var rand = Random()
+                var delay = 1000 * (minValue + rand.nextInt(maxValue - minValue))
+                Thread.sleep(delay.toLong())
+                var negativeX: Float
+                var negativeY: Float
+                Log.i("negative", "" + negativePoint.toString())
+                Log.i("positive", "" + resourcePoint.toString())
+                Log.i("realCoords", "" + clock.x + " " + clock.y)
+                //var animation = TranslateAnimation(negativePoint.x, resourcePoint.x, negativePoint.y, resourcePoint.y)
+                rotateAngle = resourceAngle
+                //animation.duration = 500;
+                //animation.fillAfter = true
+                soundPool!!.stop(streamID!!)
+                streamID = soundPool!!.play(wooshID, 500f, 500f, 1, 0, 0.95f)
+                /*runOnUiThread(Runnable {
+                clock.startAnimation(animation)
+            })*/
+                var deltaX: Float =
+                    (Math.abs(Math.abs(negativePoint.x) - Math.abs(resourcePoint.x))) / 500
+                var deltaY: Float =
+                    (Math.abs(Math.abs(negativePoint.y) - Math.abs(resourcePoint.y))) / 500
+                if (negativePoint.x > resourcePoint.x) deltaX *= -1
+                if (negativePoint.y > resourcePoint.y) deltaY *= -1
+                for (i in 1..500) {
+                    clock.x = clock.x + deltaX
+                    clock.y = clock.y + deltaY
+                    Thread.sleep(1)
+                }
+                lastPoint.set(resourcePoint.x, resourcePoint.y)
+                Thread.sleep(500)
+                soundPool!!.stop(streamID!!)
+                streamID = soundPool!!.play(blinkID, 100f, 100f, 2, 0, 1f)
+                Thread.sleep(2500)
+            }
+            if (deep>3) {
                 soundPool!!.stop(streamID!!)
                 streamID = soundPool!!.play(doDeepInspirationID, 100f, 100f, 1, 0, 1f)
+                Thread.sleep(3500)
                 this@MainActivity.runOnUiThread(java.lang.Runnable {
                     clock.visibility = View.GONE
                 })
-                Thread.sleep(2200)
                 partTwoActive = false
                 sudLarge()
             }
             else{
+                translateLeft(negativeAngle)
                 partTwo()
             }
         }
     }
     suspend fun translateLeft(endAngle : Float) = coroutineScope {
         launch {
-            var centerPointX = width/2
-            var centerPointY = height/2
-            var radius = (height/2)-100
             val clock : ImageView = findViewById(R.id.imageView)
+            var animation : TranslateAnimation
             if (endAngle==0f) {
+                var x: Float = 0f
+                var y : Float = 0f
                 while (keypressed) {
-                    rotateAngle -= 0.5f
-                    if (rotateAngle < -360) rotateAngle = -0.5f
-                    var xaar = centerPointX + (radius * cos(Math.toRadians(rotateAngle.toDouble())))
-                    var yaar = centerPointY + (radius * sin(Math.toRadians(rotateAngle.toDouble())))
-                    var animation =
-                        TranslateAnimation(lastPoint.x, xaar.toFloat(), lastPoint.y, yaar.toFloat())
-                    lastPoint.x = xaar.toFloat()
-                    lastPoint.y = yaar.toFloat()
-                    animation.fillAfter = true
-                    animation.duration = 25
-                    animation.interpolator = LinearInterpolator()
-                    clock.startAnimation(animation)
-                    Thread.sleep(25)
+                    rotateAngle -= 0.1f
+                    if (rotateAngle < -360) rotateAngle = -0.1f
+                    currentPosID-=1
+                    if (currentPosID<0) currentPosID=3600
+                    clock.x=coords[currentPosID].x
+                    clock.y=coords[currentPosID].y
+                    Thread.sleep(2)
                 }
+                lastPoint.x = coords[currentPosID].x
+                lastPoint.y = coords[currentPosID].y
+                negativePoint.set(clock.x, clock.y)
+                negativeAngle = rotateAngle
             }
             else{
-                while (rotateAngle!=endAngle) {
-                    rotateAngle -= 0.5f
-                    if (rotateAngle < -360) rotateAngle = -0.5f
-                    var xaar = centerPointX + (radius * cos(Math.toRadians(rotateAngle.toDouble())))
-                    var yaar = centerPointY + (radius * sin(Math.toRadians(rotateAngle.toDouble())))
-                    var animation =
-                        TranslateAnimation(lastPoint.x, xaar.toFloat(), lastPoint.y, yaar.toFloat())
-                    lastPoint.x = xaar.toFloat()
-                    lastPoint.y = yaar.toFloat()
-                    animation.fillAfter = true
-                    clock.startAnimation(animation)
-                    Thread.sleep(25)
+                Log.i("iiiiiisdasdad", ""+rotateAngle+" | "+endAngle)
+                if(rotateAngle<0) rotateAngle = (360+rotateAngle)
+                while (rotateAngle!=endAngle&&(coords[(rotateAngle*10).toInt()])!=(coords[((360+endAngle)*10).toInt()])) {
+                    Log.i("aaaaaaaaaaaaaaa", "aaaaaaaaaasdasdsdad")
+                    rotateAngle -= 0.1f
+                    if (rotateAngle < 0) rotateAngle = 360f
+                    var x:Float
+                    var y:Float
+                    if (rotateAngle<0) {
+                         x = coords[((360f + rotateAngle) * 10f).toInt()].x
+                         y = coords[((360f + rotateAngle) * 10f).toInt()].y
+                    }
+                    else{
+                         x = coords[((rotateAngle) * 10f).toInt()].x
+                         y = coords[((rotateAngle) * 10f).toInt()].y
+                    }
+                    clock.x=x
+                    clock.y=y
+                    Thread.sleep(2)
+                    lastPoint.x = x
+                    lastPoint.y = y
                 }
+                rotateAngle=endAngle
             }
         }
     }
     suspend fun translateRight() = coroutineScope {
         launch {
-            var centerPointX = width/2
-            var centerPointY = height/2
-            var radius = (height/2)-100
             val clock : ImageView = findViewById(R.id.imageView)
+            var animation : TranslateAnimation
             while (keypressed) {
-                rotateAngle+=0.5f
-                if (rotateAngle>360) rotateAngle = 0.5f
-                var xaar = centerPointX+(radius*cos(Math.toRadians(rotateAngle.toDouble())))
-                var yaar = centerPointY+(radius*sin(Math.toRadians(rotateAngle.toDouble())))
-                var animation = TranslateAnimation(lastPoint.x, xaar.toFloat(), lastPoint.y, yaar.toFloat())
-                lastPoint.x= xaar.toFloat()
-                lastPoint.y = yaar.toFloat()
-                resourcePoint.set(lastPoint.x, lastPoint.y)
-                animation.fillAfter = true
-                clock.startAnimation(animation)
-                Thread.sleep(25)
+                rotateAngle+=0.1f
+                if (rotateAngle>360) rotateAngle = 0.1f
+                currentPosID++
+                if (currentPosID>3600) currentPosID=0
+                clock.x=coords[currentPosID].x
+                clock.y=coords[currentPosID].y
+                Thread.sleep(2)
             }
+            lastPoint.x = coords[currentPosID].x
+            lastPoint.y = coords[currentPosID].y
+            resourcePoint.set(clock.x, clock.y)
+            resourceAngle = rotateAngle
         }
     }
 }
