@@ -1,7 +1,6 @@
 package com.kwork.whoosh
 
 import android.content.Context
-import android.graphics.Color
 import android.media.AudioManager
 import android.media.SoundPool
 import android.os.Bundle
@@ -11,8 +10,6 @@ import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
-import android.graphics.Point
-import android.graphics.PointF
 import android.view.Display
 import android.widget.ImageView
 import kotlinx.coroutines.*
@@ -22,11 +19,15 @@ import kotlin.math.sin
 import android.view.WindowManager
 import android.animation.ValueAnimator
 import android.animation.ValueAnimator.AnimatorUpdateListener
+import android.graphics.*
 import android.renderscript.Float3
 import android.util.Log
 import android.util.TypedValue
 import android.view.animation.*
 import androidx.annotation.Dimension
+import androidx.core.graphics.blue
+import androidx.core.graphics.green
+import androidx.core.graphics.red
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import java.util.concurrent.Flow
@@ -70,6 +71,7 @@ class MainActivity : FragmentActivity() {
     var currentColorID = 20
     var prevColorID = 20
     var colorSettingActive : Boolean = false
+    var resourcePointColor : Int? = null
 
     var width: Int = 0
     var height: Int = 0
@@ -101,18 +103,23 @@ class MainActivity : FragmentActivity() {
     var selectedGratitude = 2
 
     var backMenuActive : Boolean = false
-    var selectedBackMenu = 4;
+    var selectedBackMenu = 6;
     var changeMin : Boolean = false
     var changeMax : Boolean = false
     var minValue = 5
     var maxValue = 12
     lateinit var ctx : Context
 
+    var stopAll : Boolean = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         ctx = this
+        currentColorID = intent.getIntExtra("color", 20)
+        val rl: RelativeLayout = findViewById(R.id.root)
+        rl.setBackgroundColor(colors[currentColorID])
 
         val display: Display = windowManager.defaultDisplay
         val size = Point()
@@ -126,11 +133,7 @@ class MainActivity : FragmentActivity() {
         var radius = (height/2)-100
         var x = centerPointX+(radius*cos(Math.toRadians(-90.0)))
         var y = centerPointY+(radius*sin(Math.toRadians(-90.0)))
-        /*lastPoint.set(x.toFloat(),y.toFloat())
-        var animation  = TranslateAnimation(0f, x.toFloat(),0f, y.toFloat())
-        animation.fillAfter = true
-        animation.duration = 1
-        clock.startAnimation(animation)*/
+
         clock.x = x.toFloat()
         clock.y=y.toFloat()
 
@@ -163,8 +166,86 @@ class MainActivity : FragmentActivity() {
         sudID=soundPool!!.load(this, R.raw.sud, 1)
         wooshID=soundPool!!.load(this, R.raw.wooosh, 1)
     }
+    override fun onDestroy(){
+        soundPool?.autoPause()
+        super.onDestroy()
+    }
 
+    var animator = ValueAnimator()
+    var currentPosOnCircle = -90
+    fun moveImageInCircle(isStart : Boolean, isLeft : Boolean, oneDeg : Boolean) {
+        var clock : ImageView = findViewById(R.id.imageView)
+        var center : PointF = PointF(0f,0f)
+        var radius = 0f
+        var curPos : PointF = PointF(0f, 0f)
+        center.x=(width/2).toFloat()
+        center.y=(height/2-50).toFloat()
+        radius = ((height/2)-100).toFloat()
+        if (isStart) {
+            val p = Path()
+            val circle = RectF(
+                (center.x - radius),
+                (center.y-radius),
+                (center.x + radius),
+                (center.y+radius)
+            )
+            if (isLeft) {
+                if (!oneDeg){
+                        p.arcTo(circle, currentPosOnCircle.toFloat(), -360f-(currentPosOnCircle%360))
+                        p.arcTo(circle, -1f, currentPosOnCircle.toFloat()/*-360f*/)
+                    }
+                else{
+                    p.arcTo(circle, currentPosOnCircle.toFloat(), 1f)
+                    currentPosOnCircle+=1
+                    Log.i("pos", currentPosOnCircle.toString())
+                }
+            }
+            else{
+                if (!oneDeg){
+                        p.arcTo(circle, currentPosOnCircle.toFloat(), +360f-(currentPosOnCircle%360))
+                        p.arcTo(circle, 1f, 360-Math.abs(currentPosOnCircle.toFloat())/*+360f*/)
+                    }
+                else{
+                    p.arcTo(circle, currentPosOnCircle.toFloat(), -1f)
+                    currentPosOnCircle-=1
+                    Log.i("pos", currentPosOnCircle.toString())
+                }
+            }
+            val pm = PathMeasure(p, false)
+            val pos = FloatArray(2)
+            animator = ValueAnimator.ofFloat(0f, pm.length)
+            animator.addUpdateListener { animation ->
+                val v = animation.animatedValue as Float
+                pm.getPosTan(v, pos, null)
+                if(!oneDeg) {
+                    var currentPosOnCircleRad =
+                        (Math.atan(((pos[0] - center.x) / (pos[1] - center.y)).toDouble()))
+                    currentPosOnCircle = (90 + (Math.toDegrees(currentPosOnCircleRad).toInt())) * -1
+                    if (pos[1] > center.y) {
+                        currentPosOnCircle -= 180
+                    }
+                }
+                currentPosOnCircle = currentPosOnCircle%360
+                clock.setTranslationX(pos[0])
+                clock.setTranslationY(pos[1])
+            }
+            if (!oneDeg) {
+                animator.duration = 15000
+                animator.repeatMode = ValueAnimator.RESTART
+                animator.repeatCount = ValueAnimator.INFINITE
+            }
+            else
+                animator.duration = 100
+            animator.interpolator = LinearInterpolator()
+            animator.start()
+        }
+        else{
+            animator.cancel()
+            animator = ValueAnimator()
+        }
+    }
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        var clock : ImageView = findViewById(R.id.imageView)
         if (!keypressed) {
             val rl: RelativeLayout = findViewById(R.id.root)
             when (keyCode) {
@@ -178,10 +259,18 @@ class MainActivity : FragmentActivity() {
                         sudItemChange()
                     }
                     else if (setNegativePointActive&&!backMenuActive&&!colorSettingActive){
-                        GlobalScope.launch { translateLeft(0f) }
+                        //moveImageInCircle(true, true, false)
+                        currentColorID--
+                        if (currentColorID<0)currentColorID=20
+                        rl.setBackgroundColor(colors[currentColorID])
                     }
                     else if (setResourcePointActive&&!backMenuActive&&!colorSettingActive){
-                        GlobalScope.launch { translateRight() }
+                        //moveImageInCircle(true, false, false)
+                        if(resourcePointColor==null)
+                            resourcePointColor = currentColorID
+                        resourcePointColor = resourcePointColor!!-1
+                        if (resourcePointColor!! <0)resourcePointColor=20
+                        rl.setBackgroundColor(colors[resourcePointColor!!])
                     }
                     else if (sudMenuLargeActive&&!backMenuActive&&!colorSettingActive){
                         currSUDmenuItemID--
@@ -205,7 +294,7 @@ class MainActivity : FragmentActivity() {
                     }
                     else if(backMenuActive&&!colorSettingActive){
                         selectedBackMenu--
-                        if (selectedBackMenu<1) selectedBackMenu=6
+                        if (selectedBackMenu<1) selectedBackMenu=8
                         backItemChange()
                     }
                     else if (colorSettingActive){
@@ -224,10 +313,18 @@ class MainActivity : FragmentActivity() {
                         sudItemChange()
                     }
                     else if (setNegativePointActive&&!backMenuActive&&!colorSettingActive){
-                        GlobalScope.launch { translateLeft(0f) }
+                        //moveImageInCircle(true, true, false)
+                        currentColorID++
+                        if (currentColorID>20)currentColorID=0
+                        rl.setBackgroundColor(colors[currentColorID])
                     }
                     else if (setResourcePointActive&&!backMenuActive&&!colorSettingActive){
-                        GlobalScope.launch { translateRight() }
+                        //moveImageInCircle(true, false, false)
+                        if(resourcePointColor==null)
+                            resourcePointColor = currentColorID
+                        resourcePointColor = resourcePointColor!!+1
+                        if (resourcePointColor!! >20)resourcePointColor=0
+                        rl.setBackgroundColor(colors[resourcePointColor!!])
                     }
                     else if (sudMenuLargeActive&&!backMenuActive&&!colorSettingActive){
                         currSUDmenuItemID++
@@ -251,7 +348,7 @@ class MainActivity : FragmentActivity() {
                     }
                     else if(backMenuActive&&!colorSettingActive){
                         selectedBackMenu++
-                        if (selectedBackMenu>6) selectedBackMenu=1
+                        if (selectedBackMenu>8) selectedBackMenu=1
                         backItemChange()
                     }
                     else if (colorSettingActive){
@@ -262,10 +359,12 @@ class MainActivity : FragmentActivity() {
                 }
                 KeyEvent.KEYCODE_DPAD_UP -> {
                     if (setNegativePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
-                        GlobalScope.launch { translateLeft(0f) }
+                        //GlobalScope.launch { translateLeft(0f) }
+                        moveImageInCircle(true, true, false)
                     }
                     else if (setResourcePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
-                        GlobalScope.launch { translateRight() }
+                        //GlobalScope.launch { translateRight() }
+                        moveImageInCircle(true, false, false)
                     }
                     else if (colorSettingActive&&!changeMax&&!changeMin){
                         currentColorID++
@@ -286,10 +385,10 @@ class MainActivity : FragmentActivity() {
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
                     if (setNegativePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
-                        GlobalScope.launch { translateLeft(0f) }
+                        moveImageInCircle(true, true, true)
                     }
                     else if (setResourcePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
-                        GlobalScope.launch { translateRight() }
+                        moveImageInCircle(true, false, true)
                     }
                     else if (colorSettingActive&&!changeMax&&!changeMin){
                         currentColorID--
@@ -321,10 +420,18 @@ class MainActivity : FragmentActivity() {
                     }
                     else if(setNegativePointActive&&!backMenuActive&&!colorSettingActive){
                         setNegativePointActive = false
+                        negativeAngle=currentPosOnCircle.toFloat()
+                        negativePoint.set(clock.x, clock.y)
+                        if (resourcePointColor!=null)
+                            rl.setBackgroundColor(colors[resourcePointColor!!])
                         setResource()
                     }
                     else if(setResourcePointActive&&!backMenuActive&&!colorSettingActive) {
                         setResourcePointActive = false
+                        resourceAngle=currentPosOnCircle.toFloat()
+                        rotateAngle =resourceAngle
+                        resourcePoint.set(clock.x, clock.y)
+                        rl.setBackgroundColor(colors[currentColorID])
                         partTwo()
                     }
                     else if(sudMenuLargeActive&&!backMenuActive&&!colorSettingActive){
@@ -341,7 +448,7 @@ class MainActivity : FragmentActivity() {
                     else if(gratitude&&!backMenuActive&&!colorSettingActive){
                         when(selectedGratitude){
                             1->{
-                                finishAffinity()
+                                finishAndRemoveTask()
                             }
                             2->{
                                 val intent = intent
@@ -353,7 +460,8 @@ class MainActivity : FragmentActivity() {
                     else if(backMenuActive&&!colorSettingActive) {
                         when(selectedBackMenu){
                             1->{
-                                finishAffinity()
+                                android.os.Process.killProcess(android.os.Process.myPid())
+                                //finishAndRemoveTask()
                             }
                             2->{
                                 colorSettingActive = true
@@ -362,7 +470,9 @@ class MainActivity : FragmentActivity() {
                             }
                             3->{
                                 val intent = intent
+                                //intent.putExtra("color", currentColorID)
                                 finish()
+                                stopAll = true
                                 startActivity(intent)
                             }
                         }
@@ -374,6 +484,10 @@ class MainActivity : FragmentActivity() {
                         colorSettingActive=false
                         var tvColorSetting : TextView = findViewById(R.id.colorSetting)
                         tvColorSetting.visibility = View.GONE
+                        if(setResourcePointActive) {
+                            resourcePointColor = currentColorID
+                            currentColorID = prevColorID
+                        }
                     }
 
                 }
@@ -406,6 +520,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         keypressed = false
+        moveImageInCircle(false, true, false)
         return super.onKeyUp(keyCode, event)
     }
 
@@ -556,8 +671,10 @@ class MainActivity : FragmentActivity() {
 
     private fun backItemChange(){
         var tvExit : TextView = findViewById(R.id.backExit)
-        var tvColor : TextView = findViewById(R.id.BackColor)
         var tvRestart : TextView = findViewById(R.id.backRestart)
+        var tvls : TextView = findViewById(R.id.backBls)
+        var tvInterval : TextView = findViewById(R.id.backInterval)
+        var tvReverce : TextView = findViewById(R.id.backReverce)
         var tvCancel : TextView = findViewById(R.id.backCancel)
         var tvBackMin : TextView = findViewById(R.id.backMIN)
         var tvBackMax : TextView = findViewById(R.id.backMAX)
@@ -565,30 +682,40 @@ class MainActivity : FragmentActivity() {
             1->{
                 tvBackMax.setBackgroundColor(Color.WHITE)
                 tvExit.setBackgroundColor(Color.rgb(62,62,62))
-                tvColor.setBackgroundColor(Color.WHITE)
+                tvRestart.setBackgroundColor(Color.WHITE)
             }
             2->{
                 tvExit.setBackgroundColor(Color.WHITE)
-                tvColor.setBackgroundColor(Color.rgb(62,62,62))
-                tvRestart.setBackgroundColor(Color.WHITE)
+                tvRestart.setBackgroundColor(Color.rgb(62,62,62))
+                tvls.setBackgroundColor(Color.WHITE)
             }
             3->{
-                tvColor.setBackgroundColor(Color.WHITE)
-                tvRestart.setBackgroundColor(Color.rgb(62,62,62))
-                tvCancel.setBackgroundColor(Color.WHITE)
+                tvRestart.setBackgroundColor(Color.WHITE)
+                tvls.setBackgroundColor(Color.rgb(62,62,62))
+                tvInterval.setBackgroundColor(Color.WHITE)
             }
             4->{
-                tvRestart.setBackgroundColor(Color.WHITE)
+                tvls.setBackgroundColor(Color.WHITE)
+                tvInterval.setBackgroundColor(Color.rgb(62,62,62))
+                tvReverce.setBackgroundColor(Color.WHITE)
+            }
+            5->{
+                tvInterval.setBackgroundColor(Color.WHITE)
+                tvReverce.setBackgroundColor(Color.rgb(62,62,62))
+                tvCancel.setBackgroundColor(Color.WHITE)
+            }
+            6->{
+                tvReverce.setBackgroundColor(Color.WHITE)
                 tvCancel.setBackgroundColor(Color.rgb(62,62,62))
                 tvBackMin.setBackgroundColor(Color.WHITE)
             }
-            5->{
+            7->{
                 changeMin = true
                 tvCancel.setBackgroundColor(Color.WHITE)
                 tvBackMin.setBackgroundColor(Color.rgb(62,62,62))
                 tvBackMax.setBackgroundColor(Color.WHITE)
             }
-            6->{
+            8->{
                 changeMax = true
                 tvBackMin.setBackgroundColor(Color.WHITE)
                 tvBackMax.setBackgroundColor(Color.rgb(62,62,62))
@@ -598,6 +725,10 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun sudLarge(){
+        if (stopAll) {
+            stopAll = false
+            return
+        }
         deep=0
         streamID = soundPool!!.play(sudID, 100f, 100f, 1, 0, 1f)
         var sudMenuLarge : LinearLayout = findViewById(R.id.sudMenuLarge)
@@ -629,6 +760,11 @@ class MainActivity : FragmentActivity() {
             while (rotateAngle != negativeAngle) {
                 Thread.sleep(50)
             }
+            Thread.sleep(500)
+            if (stopAll) {
+                stopAll = false
+                return
+            }
             soundPool!!.stop(streamID!!)
             streamID = soundPool!!.play(attendToNegativeID, 100f, 100f, 1, 0, 1f)
             var ctx: Context = this
@@ -640,46 +776,63 @@ class MainActivity : FragmentActivity() {
 
     suspend fun moveToPositive(ctx : Context) = coroutineScope {
         launch {
+            if (stopAll) {
+                stopAll = false
+                return@launch
+            }
             val clock: ImageView = findViewById(R.id.imageView)
-            if (deep!=1) {
+            if (deep>1) {
+                Thread.sleep(2600)
                 var rand = Random()
                 var delay = 1000 * (minValue + rand.nextInt(maxValue - minValue))
                 Thread.sleep(delay.toLong())
                 var negativeX: Float
                 var negativeY: Float
-                Log.i("negative", "" + negativePoint.toString())
-                Log.i("positive", "" + resourcePoint.toString())
-                Log.i("realCoords", "" + clock.x + " " + clock.y)
-                //var animation = TranslateAnimation(negativePoint.x, resourcePoint.x, negativePoint.y, resourcePoint.y)
                 rotateAngle = resourceAngle
-                //animation.duration = 500;
-                //animation.fillAfter = true
-                soundPool!!.stop(streamID!!)
-                streamID = soundPool!!.play(wooshID, 500f, 500f, 1, 0, 0.95f)
-                /*runOnUiThread(Runnable {
-                clock.startAnimation(animation)
-            })*/
                 var deltaX: Float =
                     (Math.abs(Math.abs(negativePoint.x) - Math.abs(resourcePoint.x))) / 500
                 var deltaY: Float =
                     (Math.abs(Math.abs(negativePoint.y) - Math.abs(resourcePoint.y))) / 500
                 if (negativePoint.x > resourcePoint.x) deltaX *= -1
                 if (negativePoint.y > resourcePoint.y) deltaY *= -1
+                val rl:RelativeLayout = findViewById(R.id.root)
                 for (i in 1..500) {
                     clock.x = clock.x + deltaX
                     clock.y = clock.y + deltaY
                     Thread.sleep(1)
                 }
+                if (stopAll) {
+                    stopAll = false
+                    return@launch
+                }
+                soundPool!!.stop(streamID!!)
+                streamID = soundPool!!.play(wooshID, 500f, 500f, 1, 0, 1f)
+                if (resourcePointColor!=null)
+                    rl.setBackgroundColor(colors[resourcePointColor!!])
                 lastPoint.set(resourcePoint.x, resourcePoint.y)
                 Thread.sleep(500)
+                if (stopAll) {
+                    stopAll = false
+                    return@launch
+                }
                 soundPool!!.stop(streamID!!)
                 streamID = soundPool!!.play(blinkID, 100f, 100f, 2, 0, 1f)
-                Thread.sleep(2500)
+                //Thread.sleep(2100)
+                delay(3000)
+                if(deep>3) Thread.sleep(200)
             }
             if (deep>3) {
+                if (stopAll) {
+                    stopAll = false
+                    return@launch
+                }
+                val rl:RelativeLayout = findViewById(R.id.root)
+                if (resourcePointColor!=null)
+                    rl.setBackgroundColor(colors[currentColorID])
                 soundPool!!.stop(streamID!!)
                 streamID = soundPool!!.play(doDeepInspirationID, 100f, 100f, 1, 0, 1f)
-                Thread.sleep(3500)
+                //Thread.sleep(4750)
+                delay(5750L)
                 this@MainActivity.runOnUiThread(java.lang.Runnable {
                     clock.visibility = View.GONE
                 })
@@ -687,6 +840,10 @@ class MainActivity : FragmentActivity() {
                 sudLarge()
             }
             else{
+                if (resourcePointColor!=null){
+                    val rl:RelativeLayout = findViewById(R.id.root)
+                    rl.setBackgroundColor(colors[currentColorID])
+                    }
                 translateLeft(negativeAngle)
                 partTwo()
             }
@@ -694,11 +851,9 @@ class MainActivity : FragmentActivity() {
     }
     suspend fun translateLeft(endAngle : Float) = coroutineScope {
         launch {
+            if (stopAll) this.cancel()
             val clock : ImageView = findViewById(R.id.imageView)
-            var animation : TranslateAnimation
             if (endAngle==0f) {
-                var x: Float = 0f
-                var y : Float = 0f
                 while (keypressed) {
                     rotateAngle -= 0.1f
                     if (rotateAngle < -360) rotateAngle = -0.1f
@@ -714,10 +869,8 @@ class MainActivity : FragmentActivity() {
                 negativeAngle = rotateAngle
             }
             else{
-                Log.i("iiiiiisdasdad", ""+rotateAngle+" | "+endAngle)
                 if(rotateAngle<0) rotateAngle = (360+rotateAngle)
                 while (rotateAngle!=endAngle&&(coords[(rotateAngle*10).toInt()])!=(coords[((360+endAngle)*10).toInt()])) {
-                    Log.i("aaaaaaaaaaaaaaa", "aaaaaaaaaasdasdsdad")
                     rotateAngle -= 0.1f
                     if (rotateAngle < 0) rotateAngle = 360f
                     var x:Float
@@ -737,6 +890,7 @@ class MainActivity : FragmentActivity() {
                     lastPoint.y = y
                 }
                 rotateAngle=endAngle
+                delay(500)
             }
         }
     }
