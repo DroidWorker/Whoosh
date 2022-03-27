@@ -19,6 +19,7 @@ import kotlin.math.sin
 import android.view.WindowManager
 import android.animation.ValueAnimator
 import android.animation.ValueAnimator.AnimatorUpdateListener
+import android.content.SharedPreferences
 import android.graphics.*
 import android.renderscript.Float3
 import android.util.Log
@@ -57,10 +58,13 @@ class MainActivity : FragmentActivity() {
         Color.rgb(0,0,0)
     )
 
+    lateinit var sp : SharedPreferences
+
     var coords : MutableList<PointF> = mutableListOf()
     var currentPosID = 2700
 
     var attendToNegativeID = 0
+    var attendToPositiveID = 0
     var blinkID = 0
     var doDeepInspirationID = 0
     var setPointNegativeID = 0
@@ -112,9 +116,18 @@ class MainActivity : FragmentActivity() {
 
     var stopAll : Boolean = false
 
+    var reverseMode : Boolean = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        sp = getSharedPreferences("appcfg", MODE_PRIVATE)
+        reverseMode = intent.getBooleanExtra("reverseMode", false)
+        val tvReverce : TextView = findViewById(R.id.backReverce)
+        if (reverseMode)
+            tvReverce.setText("↩ ☒")
+
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         ctx = this
         currentColorID = intent.getIntExtra("color", 20)
@@ -142,7 +155,7 @@ class MainActivity : FragmentActivity() {
         soundPool = SoundPool(2, AudioManager.STREAM_MUSIC, 100)
         soundPool!!.setOnLoadCompleteListener(object : SoundPool.OnLoadCompleteListener{
             override fun onLoadComplete(soundPool: SoundPool?, sampleId: Int, status: Int) {
-                if(sampleId==6) {
+                if(sampleId==7) {
                     streamID = soundPool!!.play(sudID, 100f, 100f, 1, 0, 1f)
                     var tvLoading : TextView = findViewById(R.id.loading)
                     var angle = 0f
@@ -159,6 +172,7 @@ class MainActivity : FragmentActivity() {
             }
         })
         attendToNegativeID=soundPool!!.load(this, R.raw.attend_to_negative, 1)
+        attendToPositiveID=soundPool!!.load(this, R.raw.attend_to_positive, 1)
         blinkID=soundPool!!.load(this, R.raw.blink, 1)
         doDeepInspirationID=soundPool!!.load(this, R.raw.do_deep_inspiration, 1)
         setPointNegativeID=soundPool!!.load(this, R.raw.set_point_negative, 1)
@@ -279,6 +293,7 @@ class MainActivity : FragmentActivity() {
                         sudItemLargeChange()
                     }
                     else if(gratitude&&!backMenuActive&&!colorSettingActive){
+                        Log.i("test", "eeeeee")
                         var tvExit : TextView = findViewById(R.id.exit)
                         var tvRestart : TextView = findViewById(R.id.restart)
                         if (selectedGratitude==2) {
@@ -431,7 +446,8 @@ class MainActivity : FragmentActivity() {
                         resourceAngle=currentPosOnCircle.toFloat()
                         rotateAngle =resourceAngle
                         resourcePoint.set(clock.x, clock.y)
-                        rl.setBackgroundColor(colors[currentColorID])
+                        if (!reverseMode)
+                            rl.setBackgroundColor(colors[currentColorID])
                         partTwo()
                     }
                     else if(sudMenuLargeActive&&!backMenuActive&&!colorSettingActive){
@@ -452,6 +468,7 @@ class MainActivity : FragmentActivity() {
                             }
                             2->{
                                 val intent = intent
+                                intent.putExtra("reverseMode", reverseMode)
                                 finish()
                                 startActivity(intent)
                             }
@@ -464,13 +481,15 @@ class MainActivity : FragmentActivity() {
                                 //finishAndRemoveTask()
                             }
                             2->{
-                                colorSettingActive = true
-                                var tvColorSetting : TextView = findViewById(R.id.colorSetting)
-                                tvColorSetting.visibility = View.VISIBLE
-                            }
-                            3->{
                                 val intent = intent
-                                //intent.putExtra("color", currentColorID)
+                                intent.putExtra("reverseMode", reverseMode)
+                                finish()
+                                stopAll = true
+                                startActivity(intent)
+                            }
+                            5->{
+                                val intent = intent
+                                intent.putExtra("reverseMode", reverseMode)
                                 finish()
                                 stopAll = true
                                 startActivity(intent)
@@ -693,6 +712,7 @@ class MainActivity : FragmentActivity() {
                 tvRestart.setBackgroundColor(Color.WHITE)
                 tvls.setBackgroundColor(Color.rgb(62,62,62))
                 tvInterval.setBackgroundColor(Color.WHITE)
+                tvls.setText("БЛС ☒")
             }
             4->{
                 tvls.setBackgroundColor(Color.WHITE)
@@ -703,6 +723,7 @@ class MainActivity : FragmentActivity() {
                 tvInterval.setBackgroundColor(Color.WHITE)
                 tvReverce.setBackgroundColor(Color.rgb(62,62,62))
                 tvCancel.setBackgroundColor(Color.WHITE)
+                reverseMode = !reverseMode
             }
             6->{
                 tvReverce.setBackgroundColor(Color.WHITE)
@@ -754,9 +775,12 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun partTwo(){
-        if (deep==0)
-            GlobalScope.launch { moveToPositive(ctx) }
-        else {
+        if (deep==0) {
+            if (reverseMode)
+                GlobalScope.launch { moveToNegative(ctx) }
+            else GlobalScope.launch { moveToPositive(ctx) }
+        }
+        else if (!reverseMode){
             while (rotateAngle != negativeAngle) {
                 Thread.sleep(50)
             }
@@ -769,6 +793,20 @@ class MainActivity : FragmentActivity() {
             streamID = soundPool!!.play(attendToNegativeID, 100f, 100f, 1, 0, 1f)
             var ctx: Context = this
             GlobalScope.launch { moveToPositive(ctx) }
+        }
+        else if (reverseMode){
+            while (rotateAngle != resourceAngle) {
+                Thread.sleep(50)
+            }
+            Thread.sleep(500)
+            if (stopAll) {
+                stopAll = false
+                return
+            }
+            soundPool!!.stop(streamID!!)
+            streamID = soundPool!!.play(attendToPositiveID, 100f, 100f, 1, 0, 1f)
+            var ctx: Context = this
+            GlobalScope.launch { moveToNegative(ctx) }
         }
         partTwoActive = true
         deep++
@@ -849,6 +887,79 @@ class MainActivity : FragmentActivity() {
             }
         }
     }
+    suspend fun moveToNegative(ctx : Context) = coroutineScope {
+        launch {
+            if (stopAll) {
+                stopAll = false
+                return@launch
+            }
+            val clock: ImageView = findViewById(R.id.imageView)
+            if (deep>1) {
+                Thread.sleep(2600)
+                var rand = Random()
+                var delay = 1000 * (minValue + rand.nextInt(maxValue - minValue))
+                Thread.sleep(delay.toLong())
+                rotateAngle = negativeAngle
+                var deltaX: Float =
+                    (Math.abs(Math.abs(negativePoint.x) - Math.abs(resourcePoint.x))) / 500
+                var deltaY: Float =
+                    (Math.abs(Math.abs(negativePoint.y) - Math.abs(resourcePoint.y))) / 500
+                if (negativePoint.x > resourcePoint.x) deltaX *= -1
+                if (negativePoint.y > resourcePoint.y) deltaY *= -1
+                val rl:RelativeLayout = findViewById(R.id.root)
+                for (i in 1..500) {
+                    clock.x = clock.x - deltaX
+                    clock.y = clock.y - deltaY
+                    Thread.sleep(1)
+                }
+                if (stopAll) {
+                    stopAll = false
+                    return@launch
+                }
+                soundPool!!.stop(streamID!!)
+                streamID = soundPool!!.play(wooshID, 500f, 500f, 1, 0, 1f)
+                if (resourcePointColor!=null)
+                    rl.setBackgroundColor(colors[currentColorID])
+                lastPoint.set(resourcePoint.x, resourcePoint.y)
+                Thread.sleep(500)
+                if (stopAll) {
+                    stopAll = false
+                    return@launch
+                }
+                soundPool!!.stop(streamID!!)
+                streamID = soundPool!!.play(blinkID, 100f, 100f, 2, 0, 1f)
+                //Thread.sleep(2100)
+                delay(3000)
+                if(deep>3) Thread.sleep(200)
+            }
+            if (deep>3) {
+                if (stopAll) {
+                    stopAll = false
+                    return@launch
+                }
+                val rl:RelativeLayout = findViewById(R.id.root)
+                if (resourcePointColor!=null)
+                    rl.setBackgroundColor(colors[resourcePointColor!!])
+                soundPool!!.stop(streamID!!)
+                streamID = soundPool!!.play(doDeepInspirationID, 100f, 100f, 1, 0, 1f)
+                //Thread.sleep(4750)
+                delay(5750L)
+                this@MainActivity.runOnUiThread(java.lang.Runnable {
+                    clock.visibility = View.GONE
+                })
+                partTwoActive = false
+                sudLarge()
+            }
+            else{
+                if (resourcePointColor!=null){
+                    val rl:RelativeLayout = findViewById(R.id.root)
+                    rl.setBackgroundColor(colors[resourcePointColor!!])
+                }
+                translateRight(resourceAngle)
+                partTwo()
+            }
+        }
+    }
     suspend fun translateLeft(endAngle : Float) = coroutineScope {
         launch {
             if (stopAll) this.cancel()
@@ -894,23 +1005,49 @@ class MainActivity : FragmentActivity() {
             }
         }
     }
-    suspend fun translateRight() = coroutineScope {
+    suspend fun translateRight(endAngle : Float) = coroutineScope {
         launch {
+            if (stopAll) this.cancel()
             val clock : ImageView = findViewById(R.id.imageView)
-            var animation : TranslateAnimation
-            while (keypressed) {
-                rotateAngle+=0.1f
-                if (rotateAngle>360) rotateAngle = 0.1f
-                currentPosID++
-                if (currentPosID>3600) currentPosID=0
-                clock.x=coords[currentPosID].x
-                clock.y=coords[currentPosID].y
-                Thread.sleep(2)
+            if (endAngle==0f) {
+                while (keypressed) {
+                    rotateAngle -= 0.1f
+                    if (rotateAngle < -360) rotateAngle = -0.1f
+                    currentPosID-=1
+                    if (currentPosID<0) currentPosID=3600
+                    clock.x=coords[currentPosID].x
+                    clock.y=coords[currentPosID].y
+                    Thread.sleep(2)
+                }
+                lastPoint.x = coords[currentPosID].x
+                lastPoint.y = coords[currentPosID].y
+                negativePoint.set(clock.x, clock.y)
+                negativeAngle = rotateAngle
             }
-            lastPoint.x = coords[currentPosID].x
-            lastPoint.y = coords[currentPosID].y
-            resourcePoint.set(clock.x, clock.y)
-            resourceAngle = rotateAngle
+            else{
+                if(rotateAngle<0) rotateAngle = (360+rotateAngle)
+                while (rotateAngle!=endAngle&&(coords[(rotateAngle*10).toInt()])!=(coords[((360+endAngle)*10).toInt()])) {
+                    rotateAngle += 0.1f
+                    if (rotateAngle < 0) rotateAngle = 360f
+                    var x:Float
+                    var y:Float
+                    if (rotateAngle>360) {
+                        x = coords[((360f - rotateAngle) * 10f).toInt()].x
+                        y = coords[((360f - rotateAngle) * 10f).toInt()].y
+                    }
+                    else{
+                        x = coords[((rotateAngle) * 10f).toInt()].x
+                        y = coords[((rotateAngle) * 10f).toInt()].y
+                    }
+                    clock.x=x
+                    clock.y=y
+                    Thread.sleep(2)
+                    lastPoint.x = x
+                    lastPoint.y = y
+                }
+                rotateAngle=endAngle
+                delay(500)
+            }
         }
     }
 }
