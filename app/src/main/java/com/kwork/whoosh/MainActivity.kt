@@ -71,6 +71,8 @@ class MainActivity : FragmentActivity() {
     var setResourcePointID = 0
     var sudID = 0
     var wooshID = 0
+    var rID = 0
+    var lID = 0
 
     var currentColorID = 20
     var prevColorID = 20
@@ -117,16 +119,31 @@ class MainActivity : FragmentActivity() {
     var stopAll : Boolean = false
 
     var reverseMode : Boolean = false
+    var blsActive : Boolean = false
+    var blsInterval : Int = 5
+    var changeInterval : Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         sp = getSharedPreferences("appcfg", MODE_PRIVATE)
+        blsActive = sp.getBoolean("blsActive", false)
+        blsInterval = sp.getInt("blsInterval", 5)
+        minValue = sp.getInt("minValue", 5)
+        maxValue = sp.getInt("maxValue", 12)
         reverseMode = intent.getBooleanExtra("reverseMode", false)
+
+        updateIntervalValue()
+        updateMaxValue()
+        updateMaxValue()
+
         val tvReverce : TextView = findViewById(R.id.backReverce)
+        val tvBLS : TextView = findViewById(R.id.backBls)
         if (reverseMode)
             tvReverce.setText("↩ ☒")
+        if (blsActive)
+            tvBLS.setText("БЛС ☒")
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         ctx = this
@@ -155,7 +172,7 @@ class MainActivity : FragmentActivity() {
         soundPool = SoundPool(2, AudioManager.STREAM_MUSIC, 100)
         soundPool!!.setOnLoadCompleteListener(object : SoundPool.OnLoadCompleteListener{
             override fun onLoadComplete(soundPool: SoundPool?, sampleId: Int, status: Int) {
-                if(sampleId==7) {
+                if(sampleId==9) {
                     streamID = soundPool!!.play(sudID, 100f, 100f, 1, 0, 1f)
                     var tvLoading : TextView = findViewById(R.id.loading)
                     var angle = 0f
@@ -171,14 +188,16 @@ class MainActivity : FragmentActivity() {
                 }
             }
         })
+        sudID=soundPool!!.load(this, R.raw.sud, 1)
         attendToNegativeID=soundPool!!.load(this, R.raw.attend_to_negative, 1)
         attendToPositiveID=soundPool!!.load(this, R.raw.attend_to_positive, 1)
         blinkID=soundPool!!.load(this, R.raw.blink, 1)
         doDeepInspirationID=soundPool!!.load(this, R.raw.do_deep_inspiration, 1)
         setPointNegativeID=soundPool!!.load(this, R.raw.set_point_negative, 1)
         setResourcePointID=soundPool!!.load(this, R.raw.set_resource_point, 1)
-        sudID=soundPool!!.load(this, R.raw.sud, 1)
         wooshID=soundPool!!.load(this, R.raw.wooosh, 1)
+        rID = soundPool!!.load(this, R.raw.r, 1)
+        lID = soundPool!!.load(this, R.raw.l, 1)
     }
     override fun onDestroy(){
         soundPool?.autoPause()
@@ -266,6 +285,7 @@ class MainActivity : FragmentActivity() {
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     changeMax=false
                     changeMin=false
+                    changeInterval=false
                     if (sudMenuActive&&!backMenuActive&&!colorSettingActive) {
                         currSUDmenuItemID--
                         if (currSUDmenuItemID < 1)
@@ -321,6 +341,7 @@ class MainActivity : FragmentActivity() {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     changeMax=false
                     changeMin=false
+                    changeInterval=false
                     if (sudMenuActive&&!backMenuActive&&!colorSettingActive) {
                         currSUDmenuItemID++
                         if (currSUDmenuItemID > 10)
@@ -373,15 +394,15 @@ class MainActivity : FragmentActivity() {
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_UP -> {
-                    if (setNegativePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
+                    if (setNegativePointActive&&!colorSettingActive&&!changeMax&&!changeMin&&!changeInterval){
                         //GlobalScope.launch { translateLeft(0f) }
                         moveImageInCircle(true, true, false)
                     }
-                    else if (setResourcePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
+                    else if (setResourcePointActive&&!colorSettingActive&&!changeMax&&!changeMin&&!changeInterval){
                         //GlobalScope.launch { translateRight() }
                         moveImageInCircle(true, false, false)
                     }
-                    else if (colorSettingActive&&!changeMax&&!changeMin){
+                    else if (colorSettingActive&&!changeMax&&!changeMin&&!changeInterval){
                         currentColorID++
                         if (currentColorID>20)currentColorID=0
                         rl.setBackgroundColor(colors[currentColorID])
@@ -397,15 +418,21 @@ class MainActivity : FragmentActivity() {
                         maxValue++
                         updateMaxValue()
                     }
+                    else if(changeInterval){
+                        blsInterval++
+                        if (blsInterval>maxValue)
+                            blsInterval = maxValue
+                        updateIntervalValue()
+                    }
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    if (setNegativePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
+                    if (setNegativePointActive&&!colorSettingActive&&!changeMax&&!changeMin&&!changeInterval){
                         moveImageInCircle(true, true, true)
                     }
-                    else if (setResourcePointActive&&!colorSettingActive&&!changeMax&&!changeMin){
+                    else if (setResourcePointActive&&!colorSettingActive&&!changeMax&&!changeMin&&!changeInterval){
                         moveImageInCircle(true, false, true)
                     }
-                    else if (colorSettingActive&&!changeMax&&!changeMin){
+                    else if (colorSettingActive&&!changeMax&&!changeMin&&!changeInterval){
                         currentColorID--
                         if (currentColorID<0)currentColorID=20
                         rl.setBackgroundColor(colors[currentColorID])
@@ -421,6 +448,12 @@ class MainActivity : FragmentActivity() {
                         if (maxValue<=minValue)
                             maxValue++
                         updateMaxValue()
+                    }
+                    else if(changeInterval){
+                        blsInterval--
+                        if (blsInterval<1)
+                            blsInterval = 1
+                        updateIntervalValue()
                     }
                 }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_BUTTON_A -> {
@@ -487,7 +520,18 @@ class MainActivity : FragmentActivity() {
                                 stopAll = true
                                 startActivity(intent)
                             }
+                            3->{
+                                blsActive = !blsActive
+                                val tvls : TextView = findViewById(R.id.backBls)
+                                if (blsActive)
+                                    tvls.setText("БЛС ☒")
+                                else tvls.setText("БЛС")
+                                val e : SharedPreferences.Editor = sp.edit()
+                                e.putBoolean("blsActive", blsActive);
+                                e.apply()
+                            }
                             5->{
+                                reverseMode=!reverseMode
                                 val intent = intent
                                 intent.putExtra("reverseMode", reverseMode)
                                 finish()
@@ -496,6 +540,9 @@ class MainActivity : FragmentActivity() {
                             }
                         }
                         backMenuActive=false
+                        changeInterval=false
+                        changeMin=false
+                        changeMax=false
                         val backLayout : LinearLayout = findViewById(R.id.backMenu)
                         backLayout.visibility = View.GONE
                     }
@@ -546,10 +593,23 @@ class MainActivity : FragmentActivity() {
     private fun updateMaxValue(){
         var tvmax : TextView = findViewById(R.id.backMAX)
         tvmax.text = maxValue.toString()
+        val e : SharedPreferences.Editor = sp.edit()
+        e.putInt("maxValue", maxValue)
+        e.apply()
     }
     private fun updateMinValue(){
         var tvmin : TextView = findViewById(R.id.backMIN)
         tvmin.text = minValue.toString()
+        val e : SharedPreferences.Editor = sp.edit()
+        e.putInt("minValue", minValue)
+        e.apply()
+    }
+    private fun updateIntervalValue(){
+        val e : SharedPreferences.Editor = sp.edit()
+        e.putInt("blsInterval", blsInterval)
+        e.apply()
+        val tvInterval : TextView = findViewById(R.id.backInterval)
+        tvInterval.text = blsInterval.toString()
     }
 
     private fun sudItemChange(){
@@ -712,9 +772,9 @@ class MainActivity : FragmentActivity() {
                 tvRestart.setBackgroundColor(Color.WHITE)
                 tvls.setBackgroundColor(Color.rgb(62,62,62))
                 tvInterval.setBackgroundColor(Color.WHITE)
-                tvls.setText("БЛС ☒")
             }
             4->{
+                changeInterval = true
                 tvls.setBackgroundColor(Color.WHITE)
                 tvInterval.setBackgroundColor(Color.rgb(62,62,62))
                 tvReverce.setBackgroundColor(Color.WHITE)
@@ -723,7 +783,6 @@ class MainActivity : FragmentActivity() {
                 tvInterval.setBackgroundColor(Color.WHITE)
                 tvReverce.setBackgroundColor(Color.rgb(62,62,62))
                 tvCancel.setBackgroundColor(Color.WHITE)
-                reverseMode = !reverseMode
             }
             6->{
                 tvReverce.setBackgroundColor(Color.WHITE)
@@ -823,9 +882,22 @@ class MainActivity : FragmentActivity() {
                 Thread.sleep(2600)
                 var rand = Random()
                 var delay = 1000 * (minValue + rand.nextInt(maxValue - minValue))
-                Thread.sleep(delay.toLong())
-                var negativeX: Float
-                var negativeY: Float
+                var countOfCicles : Int = delay / (blsInterval*1000)
+                var side = false
+                if (blsActive)
+                    for (i in 0..countOfCicles){
+                        if (side){
+                            soundPool!!.stop(streamID!!)
+                            streamID = soundPool!!.play(rID, 500f, 500f, 1, 0, 1f)
+                        }
+                        else{
+                            soundPool!!.stop(streamID!!)
+                            streamID = soundPool!!.play(lID, 500f, 500f, 1, 0, 1f)
+                        }
+                        side = !side
+                        Thread.sleep((blsInterval*1000).toLong())
+                    }
+                else Thread.sleep(delay.toLong())
                 rotateAngle = resourceAngle
                 var deltaX: Float =
                     (Math.abs(Math.abs(negativePoint.x) - Math.abs(resourcePoint.x))) / 500
@@ -898,7 +970,22 @@ class MainActivity : FragmentActivity() {
                 Thread.sleep(2600)
                 var rand = Random()
                 var delay = 1000 * (minValue + rand.nextInt(maxValue - minValue))
-                Thread.sleep(delay.toLong())
+                var countOfCicles : Int = delay / (blsInterval*1000)
+                var side = false
+                if (blsActive)
+                    for (i in 0..countOfCicles){
+                        if (side){
+                            soundPool!!.stop(streamID!!)
+                            streamID = soundPool!!.play(rID, 500f, 500f, 1, 0, 1f)
+                        }
+                        else{
+                            soundPool!!.stop(streamID!!)
+                            streamID = soundPool!!.play(lID, 500f, 500f, 1, 0, 1f)
+                        }
+                        side = !side
+                        Thread.sleep((blsInterval*1000).toLong())
+                    }
+                else Thread.sleep(delay.toLong())
                 rotateAngle = negativeAngle
                 var deltaX: Float =
                     (Math.abs(Math.abs(negativePoint.x) - Math.abs(resourcePoint.x))) / 500
